@@ -1,0 +1,19 @@
+Développeur Python / RAG — CDI — Paris (hybride)
+
+Nous recherchons un(e) Software Engineer capable de concevoir des applications
+RAG 100% locales, respectueuses de la vie privée.
+
+Compétences exigées :
+- Python avancé
+- LangChain (pipelines RAG, splitters, retrievers)
+- Bases vectorielles (ChromaDB)
+- LLMs locaux (Ollama, llama3.x)
+- Embeddings sentence-transformers
+- Expérience Apple Silicon (Mac M1/M2) appréciée
+
+Compétences souhaitées (non bloquantes) :
+- Streamlit
+- Pydantic v2
+- Docker
+
+Mission : extraire des CV PDF, les indexer, et générer une analyse d'adéquation.

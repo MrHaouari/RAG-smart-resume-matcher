@@ -1,0 +1,45 @@
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local RAG artifacts (privacy: never commit personal CVs / embeddings)
+chroma_db/
+data/resumes/*
+!data/resumes/.gitkeep
+!data/resumes/sample_cv.pdf
+data/jobs/*
+!data/jobs/.gitkeep
+!data/jobs/sample_job.txt
+uploads/
+
+# Model / HF caches
+.cache/
+*.bin
+*.gguf
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Streamlit
+.streamlit/secrets.toml
