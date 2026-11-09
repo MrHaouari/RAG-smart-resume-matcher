@@ -117,7 +117,7 @@ FIRST/
 
 ### 1. Cloner le dépôt et se placer dans le projet
 ```bash
-git clone https://github.com/votre-compte/smart-resume-matcher.git
+git clone https://github.com/votre-compte/RAG-smart-resume-matcher.git
 cd smart-resume-matcher
 ```
 
