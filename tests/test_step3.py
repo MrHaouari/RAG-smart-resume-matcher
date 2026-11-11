@@ -91,6 +91,9 @@ class TestStep3(unittest.TestCase):
             ),
         ]
 
+        mock_cross_encoder = MagicMock()
+        mock_cross_encoder.predict.return_value = [0.95, 0.75]
+
         mock_llm = MagicMock()
         mock_report = MatchReport(
             match_score=90,
@@ -104,24 +107,134 @@ class TestStep3(unittest.TestCase):
         pipeline = RAGPipeline(
             vector_store=mock_vectorstore,
             structured_llm=mock_llm,
+            cross_encoder=mock_cross_encoder,
             retriever_k=DEFAULT_RETRIEVER_K,
         )
 
         job_desc = "Recherche développeur Python RAG et ChromaDB"
         docs = pipeline.retrieve(job_desc, k=2)
         self.assertEqual(len(docs), 2)
-        mock_vectorstore.similarity_search.assert_called_once_with(job_desc, k=2)
+        mock_vectorstore.similarity_search.assert_called_once_with(job_desc, k=pipeline.initial_k)
 
         report = pipeline.analyze(job_desc)
         self.assertEqual(report.match_score, 90)
         self.assertEqual(report.matching_skills, ["Python", "LangChain", "ChromaDB"])
         mock_llm.invoke.assert_called_once()
 
+    def test_rag_pipeline_two_stage_reranking(self):
+        """Test Stage 1 vector search + Stage 2 Cross-Encoder re-ranking."""
+        mock_vectorstore = MagicMock()
+        doc_a = Document(page_content="Chunk A (weak match)", metadata={"page": 1})
+        doc_b = Document(page_content="Chunk B (strong match)", metadata={"page": 2})
+        mock_vectorstore.similarity_search.return_value = [doc_a, doc_b]
+
+        mock_cross_encoder = MagicMock()
+        mock_cross_encoder.predict.return_value = [0.15, 0.88]
+
+        pipeline = RAGPipeline(
+            vector_store=mock_vectorstore,
+            structured_llm=MagicMock(),
+            cross_encoder=mock_cross_encoder,
+            initial_k=15,
+            final_k=1,
+        )
+
+        job_desc = "Recherche ingénieur IA"
+        top_docs = pipeline.retrieve(job_desc)
+
+        mock_vectorstore.similarity_search.assert_called_once_with(job_desc, k=15)
+        mock_cross_encoder.predict.assert_called_once()
+        self.assertEqual(len(top_docs), 1)
+        self.assertEqual(top_docs[0].page_content, "Chunk B (strong match)")
+        self.assertAlmostEqual(top_docs[0].metadata["rerank_score"], 0.88)
+
     def test_rag_pipeline_empty_job_description(self):
         """Test that empty job description raises ValueError."""
-        pipeline = RAGPipeline(vector_store=MagicMock(), structured_llm=MagicMock())
+        pipeline = RAGPipeline(
+            vector_store=MagicMock(),
+            structured_llm=MagicMock(),
+            cross_encoder=MagicMock(),
+        )
         with self.assertRaises(ValueError):
             pipeline.retrieve("   ")
+
+    def test_sanitize_text(self):
+        """Test sanitization of control characters, bullets, and whitespace."""
+        from src.rag.ingestion import sanitize_text
+
+        dirty_text = (
+            "John Doe\x7f - Dev\n\n\n"
+            "• Python\n"
+            "● LangChain\n"
+            "\uf0b7 ChromaDB   with   spaces\n\n\n\n"
+            "End."
+        )
+        cleaned = sanitize_text(dirty_text)
+        self.assertNotIn("\x7f", cleaned)
+        self.assertNotIn("•", cleaned)
+        self.assertNotIn("●", cleaned)
+        self.assertIn("- Python", cleaned)
+        self.assertIn("- LangChain", cleaned)
+        self.assertIn("- ChromaDB with spaces", cleaned)
+        self.assertNotIn("\n\n\n", cleaned)
+
+    def test_parent_child_ingestion_chunking(self):
+        """Test Parent-Child chunking and parent_id linkage."""
+        from src.rag.ingestion import ParentChildIngestion
+
+        ingester = ParentChildIngestion(
+            parent_chunk_size=300,
+            parent_chunk_overlap=50,
+            child_chunk_size=80,
+            child_chunk_overlap=15,
+        )
+        sample_page = Document(
+            page_content="Senior Software Engineer. Experience with Python, LangChain, ChromaDB and local LLMs. "
+                         "Developed end-to-end RAG applications with high performance on Apple Silicon.",
+            metadata={"filename": "cv.pdf", "page": 1},
+        )
+        result = ingester.create_parent_child_chunks([sample_page])
+
+        self.assertGreater(len(result.parent_documents), 0)
+        self.assertGreater(len(result.child_documents), 0)
+
+        # Vérification de l'association parent_id
+        for child in result.child_documents:
+            pid = child.metadata.get("parent_id")
+            self.assertIsNotNone(pid)
+            self.assertIn(pid, result.parent_documents)
+            # Vérifier que le contenu de l'enfant est bien inclus dans le parent
+            parent = result.parent_documents[pid]
+            self.assertIn(child.page_content, parent.page_content)
+
+    def test_parent_resolution_and_deduplication(self):
+        """Test that Child Chunks resolve to their Parent Document without duplication."""
+        parent_id = "parent_test_123"
+        parent_doc = Document(
+            page_content="Full parent paragraph with complete sentence structure and context.",
+            metadata={"parent_id": parent_id, "page": 1, "filename": "cv.pdf"},
+        )
+        child1 = Document(
+            page_content="child snippet 1",
+            metadata={"parent_id": parent_id, "rerank_score": 0.95},
+        )
+        child2 = Document(
+            page_content="child snippet 2",
+            metadata={"parent_id": parent_id, "rerank_score": 0.75},
+        )
+
+        pipeline = RAGPipeline(
+            vector_store=MagicMock(),
+            structured_llm=MagicMock(),
+            cross_encoder=MagicMock(),
+            parent_store={parent_id: parent_doc},
+        )
+
+        resolved = pipeline.resolve_parents([child1, child2])
+        # Two children from the same parent must resolve to exactly ONE parent document
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(resolved[0].page_content, parent_doc.page_content)
+        self.assertAlmostEqual(resolved[0].metadata["rerank_score"], 0.95)
 
     def test_alias_resumematcher(self):
         """Test that ResumeMatcherRAG is an alias of RAGPipeline."""

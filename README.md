@@ -22,28 +22,38 @@
 │       (PDF)            │         │         (Texte)        │
 └───────────┬────────────┘         └───────────┬────────────┘
             │                                  │
-      [ PDFParser ]                            │
-  (Extraction + Chunking                       │
-   RecursiveSplitter)                          │
+    [ Ingestion & Sanitization ]               │
+   (Nettoyage Regex + Césures)                 │
             │                                  │
             ▼                                  │
-     [ Chunks + Meta ]                         │
-            │                                  │
-  [ Sentence-Transformers ]                    │
-      (MPS / Local GPU)                        │
+   [ Parent-Child Chunking ]                   │
+   - Parents: ~900 car. (Sections)             │
+   - Children: ~180 car. (Micro-chunks)        │
+      (Aucun mot tronqué)                      │
             │                                  │
             ▼                                  │
-     [ ChromaDB Store ]                        │
-       (Indexation)                            │
+    [ ChromaDB Vector Store ]                  │
+     (Indexation des Children)                 │
             │                                  │
             └───────────────┬──────────────────┘
                             ▼
-               [ Recherche de Similarité ]
-                   (Top-k = 4 Chunks)
+               [ Étape 1 : Fast Retrieval ]
+                  (ChromaDB Bi-Encoder)
+                  Vivier initial k = 15
                             │
                             ▼
-               [ Prompt RAG Strict RH ]
-              (Anti-hallucination, Français)
+             [ Étape 2 : Precision Re-ranking ]
+           (Cross-Encoder: ms-marco-MiniLM-L-6-v2)
+               Sélection Top-4 Child Chunks
+                            │
+                            ▼
+             [ Étape 3 : Parent Resolution ]
+            Récupération des sections parentes
+            complètes (sans phrases coupées)
+                            │
+                            ▼
+                [ Prompt RAG Strict RH ]
+            (Sections Parentes Non Tronquées)
                             │
                             ▼
                  [ ChatOllama (Local) ]
@@ -80,7 +90,8 @@ FIRST/
 │   │   └── pdf_parser.py           # Parsing PDF (pypdf) & Semantic Chunking
 │   ├── rag/
 │   │   ├── __init__.py
-│   │   └── pipeline.py             # Orchestrateur RAG de bout en bout
+│   │   ├── ingestion.py            # Sanitization Regex & Partitionnement Parent-Child
+│   │   └── pipeline.py             # Two-Stage RAG & Résolution Parent-Document
 │   ├── schemas/
 │   │   ├── __init__.py
 │   │   └── match_report.py         # Schéma Pydantic v2 (MatchReport)

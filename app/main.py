@@ -268,8 +268,9 @@ with st.sidebar:
     )
 
     st.markdown(f"• **LLM :** `{settings.OLLAMA_MODEL}`")
-    st.markdown(f"• **Embeddings :** `all-MiniLM-L6-v2` (MPS/Apple Silicon)")
-    st.markdown(f"• **Vector Store :** `ChromaDB` (local)")
+    st.markdown("• **Bi-Encoder :** `all-MiniLM-L6-v2` (MPS)")
+    st.markdown(f"• **Cross-Encoder :** `{getattr(settings, 'CROSS_ENCODER_MODEL_NAME', 'ms-marco-MiniLM-L-6-v2').split('/')[-1]}`")
+    st.markdown("• **Vector Store :** `ChromaDB` (local)")
 
     st.divider()
     st.caption(
@@ -348,26 +349,16 @@ if analyze_btn:
 
             progress_bar = st.progress(0, text="Initialisation du pipeline RAG...")
 
-            # 2. Parsing et extraction des chunks
-            progress_bar.progress(25, text="Extraction et découpage sémantique du CV...")
-            parser = PDFParser()
-            chunks = parser.load_and_split(temp_pdf_path)
+            # 2 & 3. Ingestion Parent-Child (Sanitization + Indexation micro-chunks)
+            progress_bar.progress(30, text="Sanitization et découpage Parent-Child (Sections complètes & Micro-chunks)...")
+            pipeline = RAGPipeline(retriever_k=retriever_k)
+            num_children = pipeline.index_resume(temp_pdf_path, reset=True)
 
-            if not chunks:
+            if num_children == 0:
                 raise PDFParserError("Aucun texte exploitable n'a été extrait du document PDF.")
 
-            # 3. Indexation vectorielle dans ChromaDB
-            progress_bar.progress(50, text=f"Indexation vectorielle de {len(chunks)} chunks dans ChromaDB...")
-            vector_store = VectorStoreManager()
-            vector_store.reset_collection()
-            vector_store.add_documents(chunks)
-
-            # 4. Exécution du RAG et inférence LLM
-            progress_bar.progress(75, text=f"Recherche de similarité (k={retriever_k}) et inférence Ollama...")
-            pipeline = RAGPipeline(
-                vector_store=vector_store,
-                retriever_k=retriever_k,
-            )
+            # 4. Exécution du RAG (Re-ranking Cross-Encoder -> Résolution Parent) et inférence LLM
+            progress_bar.progress(70, text="Recherche vectorielle (Child Chunks) + Re-ranking Cross-Encoder -> Résolution Parents...")
             report: MatchReport = pipeline.analyze(job_description)
 
             progress_bar.progress(100, text="Analyse terminée avec succès !")
@@ -450,12 +441,14 @@ if analyze_btn:
                 st.write("_Aucune recommandation spécifique requise._")
 
             # Expander de transparence : inspection des chunks RAG
-            with st.expander("🔍 Voir les extraits du CV utilisés pour cette analyse (Preuves RAG)"):
+            with st.expander("🔍 Voir les extraits du CV utilisés pour cette analyse (Preuves RAG & Re-ranking)"):
                 retrieved_docs = pipeline.retrieve(job_description, k=retriever_k)
                 for i, doc in enumerate(retrieved_docs, start=1):
                     page = doc.metadata.get("page", "?")
                     chunk_idx = doc.metadata.get("chunk_index", "?")
-                    st.markdown(f"**Extrait #{i}** *(Page {page}, Chunk #{chunk_idx})*")
+                    score = doc.metadata.get("rerank_score")
+                    score_info = f" — Score Cross-Encoder: {score:+.3f}" if score is not None else ""
+                    st.markdown(f"**Extrait #{i}** *(Page {page}, Chunk #{chunk_idx}{score_info})*")
                     st.code(doc.page_content, language="markdown")
 
             # Expander JSON brut

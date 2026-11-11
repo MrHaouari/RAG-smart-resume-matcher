@@ -24,12 +24,22 @@ class Settings:
     OLLAMA_TEMPERATURE: float = 0.1
 
     EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
+    CROSS_ENCODER_MODEL_NAME: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+    INITIAL_RETRIEVAL_K: int = 15
+    FINAL_RERANK_K: int = 4
 
     CHROMA_PERSIST_DIR: str = "./chroma_db"
     CHROMA_COLLECTION_NAME: str = "resume_matcher"
 
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 80
+
+    # Paramètres Parent-Document Retriever
+    PARENT_CHUNK_SIZE: int = 900
+    PARENT_CHUNK_OVERLAP: int = 100
+    CHILD_CHUNK_SIZE: int = 180
+    CHILD_CHUNK_OVERLAP: int = 30
 
     @property
     def chroma_persist_path(self) -> Path:
@@ -51,8 +61,15 @@ OLLAMA_BASE_URL = settings.OLLAMA_BASE_URL
 OLLAMA_MODEL = settings.OLLAMA_MODEL
 OLLAMA_TEMPERATURE = settings.OLLAMA_TEMPERATURE
 EMBEDDING_MODEL_NAME = settings.EMBEDDING_MODEL_NAME
+CROSS_ENCODER_MODEL_NAME = settings.CROSS_ENCODER_MODEL_NAME
+INITIAL_RETRIEVAL_K = settings.INITIAL_RETRIEVAL_K
+FINAL_RERANK_K = settings.FINAL_RERANK_K
 CHROMA_PERSIST_DIR = settings.CHROMA_PERSIST_DIR
 CHROMA_COLLECTION_NAME = settings.CHROMA_COLLECTION_NAME
 CHUNK_SIZE = settings.CHUNK_SIZE
 CHUNK_OVERLAP = settings.CHUNK_OVERLAP
+PARENT_CHUNK_SIZE = settings.PARENT_CHUNK_SIZE
+PARENT_CHUNK_OVERLAP = settings.PARENT_CHUNK_OVERLAP
+CHILD_CHUNK_SIZE = settings.CHILD_CHUNK_SIZE
+CHILD_CHUNK_OVERLAP = settings.CHILD_CHUNK_OVERLAP
 CHROMA_DIR = settings.chroma_persist_path
